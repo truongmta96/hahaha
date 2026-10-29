@@ -21,5 +21,35 @@ class SeedTest(unittest.TestCase):
         self.assertNotIn('seed_orders', out.getvalue())
         self.assertNotIn('INSERT INTO order_lines', out.getvalue())
 
+
+class EncodingTest(unittest.TestCase):
+    def test_output_file_ignores_console_encoding(self):
+        import os
+        from pathlib import Path
+        import subprocess
+        import sys
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'nested' / 'demo.sql'
+            subprocess.run([sys.executable, str(Path(__file__).with_name('generate_data.py')), '--products', '5', '--customers', '1', '--orders', '0', '--output', str(output)], env={**os.environ, 'PYTHONIOENCODING': 'cp437'}, check=True)
+            data = output.read_bytes()
+            self.assertFalse(data.startswith(b'\xef\xbb\xbf'))
+            text = data.decode('utf-8')
+            self.assertIn('SET NAMES utf8mb4;', text)
+            self.assertIn('Giấy in mẫu 1', text)
+            self.assertIn('Cái', text)
+
+    def test_repair_has_preview_and_byte_exact_guards(self):
+        from repair_seed_encoding import generate as repair, variants
+        self.assertIn('Giấy in'.encode('utf-8').decode('cp437'), variants('Giấy in'))
+        preview, apply = io.StringIO(), io.StringIO()
+        repair(preview)
+        repair(apply, apply=True)
+        self.assertNotIn('UPDATE ', preview.getvalue())
+        self.assertIn('UPDATE products', apply.getvalue())
+        self.assertIn('HEX(p.name)=HEX(', apply.getvalue())
+        self.assertIn("p.sku=CONCAT('VPP'", apply.getvalue())
+        self.assertNotIn('DELETE ', apply.getvalue())
+
 if __name__ == '__main__':
     unittest.main()

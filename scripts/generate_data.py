@@ -3,6 +3,7 @@
 import argparse
 import random
 import sys
+from pathlib import Path
 
 
 def quote(v):
@@ -19,7 +20,7 @@ def generate(out, products=100000, customers=20000, orders=100000, batch=1000):
                 pending.clear()
         if pending:
             out.write(f'INSERT INTO {table}({columns}) VALUES ' + ','.join(pending) + ';\n')
-    out.write('-- Run once on a fresh demo database. All FK and CHECK constraints stay enabled.\nSTART TRANSACTION;\n')
+    out.write('-- Run once on a fresh demo database. All FK and CHECK constraints stay enabled.\nSET NAMES utf8mb4;\nSTART TRANSACTION;\n')
     emit('employees', 'id,code,name,email,department,active', ((i, f'NV{i:05}', f'Nhân viên {i}', f'nv{i}@example.test', 'Bán hàng', 1) for i in range(1, 101)))
     categories = ['Bút viết', 'Giấy in', 'Sổ tay', 'Dụng cụ học tập', 'Hồ sơ văn phòng']
     emit('products', 'id,sku,name,category,unit,price,active', ((i, f'VPP{i:09}', f'{categories[i % 5]} mẫu {i}', categories[i % 5], 'Cái', (i % 200 + 1) * 1000, 1) for i in range(1, products + 1)))
@@ -55,7 +56,14 @@ if __name__ == '__main__':
     parser.add_argument('--customers', type=int, default=20000)
     parser.add_argument('--orders', type=int, default=100000)
     parser.add_argument('--batch', type=int, default=1000)
+    parser.add_argument('--output', type=Path, help='Write UTF-8 SQL directly; recommended on Windows (no PowerShell pipe)')
     args = parser.parse_args()
     if min(args.products, args.customers, args.batch) < 1 or args.orders < 0:
         parser.error('products/customers/batch > 0; orders >= 0')
-    generate(sys.stdout, args.products, args.customers, args.orders, args.batch)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        with args.output.open('w', encoding='utf-8', newline='\n') as output:
+            generate(output, args.products, args.customers, args.orders, args.batch)
+    else:
+        sys.stdout.reconfigure(encoding='utf-8')
+        generate(sys.stdout, args.products, args.customers, args.orders, args.batch)

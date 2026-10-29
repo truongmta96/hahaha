@@ -21,14 +21,14 @@ Chỉ chạy **một lần** sau migration và bootstrap, trên DB demo mới ch
 
 ```bash
 mkdir -p data
-python3 scripts/generate_data.py > data/demo.sql
+python scripts/generate_data.py --output data/demo.sql
 docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql --default-character-set=utf8mb4 -ustationery stationery' < data/demo.sql
 ```
 
 Mặc định 100.000 sản phẩm, 20.000 khách, 100.000 đơn, 3 kho và các bảng liên quan: khoảng **1,04 triệu dòng**. Có thể tăng:
 
 ```bash
-python3 scripts/generate_data.py --products 1000000 --customers 100000 --orders 1000000 > data/large.sql
+python scripts/generate_data.py --products 1000000 --customers 100000 --orders 1000000 --output data/large.sql
 ```
 
 Generator dùng bộ nhớ theo batch và seed cố định. Import là một transaction lớn để tránh DB demo nửa chừng; với hàng triệu dòng cần đủ undo/redo/disk và thời gian. Lệnh mysql mặc định dừng nếu gặp lỗi, không dùng `--force`. Đối soát sau nạp:
@@ -97,3 +97,10 @@ Kiểm thử tích hợp gồm migration + JPA validation, duyệt hai tầng, c
 Có kịch bản đọc sản phẩm `scripts/load-test.js` cho k6 (20 → 100 virtual users). Đặt `BASE_URL`, `API_USER`, `API_PASSWORD` qua môi trường bảo mật; không đưa mật khẩu vào lịch sử lệnh. Đây là workload đọc, chưa đo thông lượng bán/nhập thực tế. Ghi lại cấu hình máy, p95, error rate, CPU, DB slow query và pool saturation trước khi tăng instance. Không coi số lượng seed là bằng chứng chịu được truy cập lớn.
 
 [Kết quả kiểm chứng trong workspace](docs/validation.md). Script smoke HTTP đọc biến `API_URL`, `API_USER`, `API_PASSWORD` và giả định bộ dữ liệu mặc định đã nạp. Mật khẩu local nằm trong `.env` (ignored); không chia sẻ file này.
+
+
+## Tiếng Việt bị lỗi sau khi nạp dữ liệu trên Windows
+
+Không dùng `python ... | Out-File` hoặc `>` trong Windows PowerShell để xuất SQL tiếng Việt: dữ liệu có thể bị chuyển mã trước khi ghi ra file. Dùng `python scripts/generate_data.py --output data/demo.sql` để Python ghi UTF-8 trực tiếp, không BOM. File SQL tự khai báo `SET NAMES utf8mb4`.
+
+Nếu đã nạp dữ liệu bị lỗi, **không nạp lại demo.sql** vì sẽ trùng ID. Làm theo [hướng dẫn sửa mã hóa dữ liệu mẫu](docs/repair-encoding.md). Công cụ chỉ khớp các biến thể mã hóa đã biết của dữ liệu demo; không đổi toàn bộ charset cột hoặc xóa DB.
